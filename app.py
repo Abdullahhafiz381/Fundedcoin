@@ -1,90 +1,422 @@
-streamlit_funding_rate_dashboard.py
+import streamlit as st
+import requests
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+from datetime import datetime
+import time
 
-Funding Rate Sentiment Dashboard (Binance Futures) — Streamlit app
+# Page configuration
+st.set_page_config(
+    page_title="Bitcoin Network Analysis",
+    page_icon="₿",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-Notes:
+class BitnodesAnalyzer:
+    def __init__(self):
+        self.base_url = "https://bitnodes.io/api/v1"
+    
+    def fetch_snapshots(self):
+        """Fetch the latest snapshots from Bitnodes API"""
+        try:
+            # Get snapshot list (sorted by timestamp, latest first)
+            snapshots_url = f"{self.base_url}/snapshots/?limit=10"
+            response = requests.get(snapshots_url, timeout=10)
+            response.raise_for_status()
+            snapshots_data = response.json()
+            
+            if not snapshots_data.get('results'):
+                return None, "No snapshot data available"
+            
+            # Get the two most recent snapshots
+            latest_snapshot_url = snapshots_data['results'][0]['url']
+            previous_snapshot_url = snapshots_data['results'][1]['url']
+            
+            # Fetch detailed data for both snapshots
+            latest_response = requests.get(latest_snapshot_url, timeout=10)
+            latest_response.raise_for_status()
+            latest_data = latest_response.json()
+            
+            previous_response = requests.get(previous_snapshot_url, timeout=10)
+            previous_response.raise_for_status()
+            previous_data = previous_response.json()
+            
+            return {
+                'latest': latest_data,
+                'previous': previous_data,
+                'latest_timestamp': snapshots_data['results'][0]['timestamp'],
+                'previous_timestamp': snapshots_data['results'][1]['timestamp']
+            }, None
+            
+        except requests.exceptions.RequestException as e:
+            return None, f"API request failed: {str(e)}"
+        except (KeyError, IndexError) as e:
+            return None, f"Data parsing error: {str(e)}"
+        except Exception as e:
+            return None, f"Unexpected error: {str(e)}"
+    
+    def calculate_tor_percentage(self, nodes_data):
+        """Calculate Tor percentage from nodes data"""
+        try:
+            total_nodes = len(nodes_data)
+            if total_nodes == 0:
+                return 0
+            
+            tor_nodes = sum(1 for node in nodes_data if '.onion' in node[0])
+            tor_percentage = (tor_nodes / total_nodes) * 100
+            return round(tor_percentage, 2)
+        except Exception:
+            return 0
+    
+    def calculate_network_signal(self, current_data, previous_data):
+        """Calculate network signal based on the formula"""
+        try:
+            # Active nodes = nodes that responded and are online
+            active_nodes = current_data.get('total_nodes', 0)
+            
+            current_total_nodes = current_data.get('total_nodes', 0)
+            previous_total_nodes = previous_data.get('total_nodes', 0)
+            
+            if previous_total_nodes == 0:
+                return 0
+            
+            # Signal = (Active Nodes ÷ Total Nodes) × ((Current Total Nodes − Previous Total Nodes) ÷ Previous Total Nodes)
+            active_ratio = active_nodes / current_total_nodes if current_total_nodes > 0 else 0
+            growth_ratio = (current_total_nodes - previous_total_nodes) / previous_total_nodes
+            
+            signal = active_ratio * growth_ratio
+            return round(signal, 4)
+        except Exception:
+            return 0
+    
+    def get_market_bias(self, tor_trend, network_signal):
+        """Determine market bias based on trends"""
+        tor_bias = "NEUTRAL"
+        if tor_trend > 1:  # Using 1% threshold for significant change
+            tor_bias = "BEARISH (Sell Bias)"
+        elif tor_trend < -1:
+            tor_bias = "BULLISH (Buy Bias)"
+        
+        signal_bias = "SIDEWAYS"
+        if network_signal > 0.001:  # Small threshold for signal
+            signal_bias = "BUY"
+        elif network_signal < -0.001:
+            signal_bias = "SELL"
+        
+        return tor_bias, signal_bias
+    
+    def analyze_network(self):
+        """Main analysis function"""
+        snapshots, error = self.fetch_snapshots()
+        if error:
+            return None, error
+        
+        latest_data = snapshots['latest']
+        previous_data = snapshots['previous']
+        
+        # Calculate Tor percentages
+        current_tor_pct = self.calculate_tor_percentage(latest_data.get('nodes', []))
+        previous_tor_pct = self.calculate_tor_percentage(previous_data.get('nodes', []))
+        
+        # Calculate Tor trend
+        tor_trend = 0
+        if previous_tor_pct > 0:
+            tor_trend = ((current_tor_pct - previous_tor_pct) / previous_tor_pct) * 100
+        
+        # Calculate network signal
+        network_signal = self.calculate_network_signal(latest_data, previous_data)
+        
+        # Get market biases
+        tor_bias, signal_bias = self.get_market_bias(tor_trend, network_signal)
+        
+        # Prepare results
+        results = {
+            'current_tor_percentage': current_tor_pct,
+            'previous_tor_percentage': previous_tor_pct,
+            'tor_trend': round(tor_trend, 2),
+            'active_nodes': latest_data.get('total_nodes', 0),
+            'total_nodes': latest_data.get('total_nodes', 0),
+            'previous_total_nodes': previous_data.get('total_nodes', 0),
+            'network_signal': network_signal,
+            'tor_bias': tor_bias,
+            'signal_bias': signal_bias,
+            'latest_timestamp': snapshots['latest_timestamp'],
+            'previous_timestamp': snapshots['previous_timestamp'],
+            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        return results, None
 
-- Uses Binance Futures public REST endpoints to fetch funding rates.
+# Initialize analyzer
+analyzer = BitnodesAnalyzer()
 
-- No API key required.
+# Custom CSS
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 3rem;
+        font-weight: bold;
+        background: linear-gradient(45deg, #FF6B00, #F7931A);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .metric-card {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        padding: 1.5rem;
+        border-left: 4px solid #F7931A;
+    }
+    .trend-up {
+        color: #00D4AA;
+    }
+    .trend-down {
+        color: #FF4B4B;
+    }
+    .signal-buy {
+        color: #00D4AA;
+        font-weight: bold;
+    }
+    .signal-sell {
+        color: #FF4B4B;
+        font-weight: bold;
+    }
+    .bias-bearish {
+        color: #FF4B4B;
+        font-weight: bold;
+    }
+    .bias-bullish {
+        color: #00D4AA;
+        font-weight: bold;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-- Keep an eye on Binance rate limits if you request many symbols frequently.
+# Header
+st.markdown('<div class="main-header">₿ Bitcoin Network Analysis</div>', unsafe_allow_html=True)
+st.markdown("### Real-time Tor Node Tracking & Network Signals")
 
-import time from typing import List, Dict
+# Sidebar
+with st.sidebar:
+    st.image("https://bitcoin.org/img/icons/opengraph.png", width=100)
+    st.title("Settings")
+    
+    if st.button("🔄 Refresh Data", use_container_width=True):
+        st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### About")
+    st.markdown("""
+    This app analyzes Bitcoin network data from Bitnodes API to provide:
+    - **Tor Node Percentage**: Privacy network usage
+    - **Network Signal**: Trading insights
+    - **Market Bias Indicators**: Based on network trends
+    """)
+    
+    st.markdown("---")
+    st.markdown("### Data Source")
+    st.markdown("[Bitnodes.io API](https://bitnodes.io/)")
+    st.markdown(f"Last update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-import pandas as pd import requests import streamlit as st
+# Main content
+try:
+    # Fetch data with progress indicator
+    with st.spinner('Fetching data from Bitnodes API...'):
+        results, error = analyzer.analyze_network()
+    
+    if error:
+        st.error(f"Error fetching data: {error}")
+        st.stop()
+    
+    # Display metrics in columns
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric(
+            label="Current Tor %",
+            value=f"{results['current_tor_percentage']}%",
+            delta=f"{results['tor_trend']:.2f}%"
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric(
+            label="Network Signal",
+            value=f"{results['network_signal']:.4f}",
+            delta=None
+        )
+        bias_color = "signal-buy" if results['signal_bias'] == "BUY" else "signal-sell" if results['signal_bias'] == "SELL" else ""
+        st.markdown(f"<span class='{bias_color}'>{results['signal_bias']}</span>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric(
+            label="Active Nodes",
+            value=f"{results['active_nodes']:,}"
+        )
+        st.metric(
+            label="Total Nodes",
+            value=f"{results['total_nodes']:,}"
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric(
+            label="Previous Tor %",
+            value=f"{results['previous_tor_percentage']}%"
+        )
+        bias_color = "bias-bullish" if "BULLISH" in results['tor_bias'] else "bias-bearish" if "BEARISH" in results['tor_bias'] else ""
+        st.markdown(f"<span class='{bias_color}'>{results['tor_bias']}</span>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-BASE_BINANCE = "https://fapi.binance.com"
+    # Charts and Visualizations
+    st.markdown("---")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Tor Percentage Comparison
+        fig_tor = go.Figure()
+        fig_tor.add_trace(go.Indicator(
+            mode = "number+delta",
+            value = results['current_tor_percentage'],
+            number = {'suffix': "%", 'font': {'size': 40}},
+            delta = {'reference': results['previous_tor_percentage'], 'relative': False, 'font': {'size': 20}},
+            title = {"text": "Tor Percentage Trend"},
+            domain = {'row': 0, 'column': 0}
+        ))
+        fig_tor.update_layout(
+            height=200,
+            margin=dict(l=10, r=10, t=50, b=10)
+        )
+        st.plotly_chart(fig_tor, use_container_width=True)
+        
+        # Node Distribution
+        tor_nodes = results['current_tor_percentage'] / 100 * results['total_nodes']
+        regular_nodes = results['total_nodes'] - tor_nodes
+        
+        fig_nodes = px.pie(
+            values=[regular_nodes, tor_nodes],
+            names=['Regular Nodes', 'Tor Nodes'],
+            title="Node Distribution",
+            color_discrete_sequence=['#F7931A', '#8B4513']
+        )
+        st.plotly_chart(fig_nodes, use_container_width=True)
+    
+    with col2:
+        # Network Signal Gauge
+        fig_signal = go.Figure(go.Indicator(
+            mode = "gauge+number+delta",
+            value = results['network_signal'],
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': "Network Signal", 'font': {'size': 24}},
+            delta = {'reference': 0},
+            gauge = {
+                'axis': {'range': [-0.01, 0.01]},
+                'bar': {'color': "darkblue"},
+                'steps': [
+                    {'range': [-0.01, -0.001], 'color': "lightcoral"},
+                    {'range': [-0.001, 0.001], 'color': "lightyellow"},
+                    {'range': [0.001, 0.01], 'color': "lightgreen"}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 0.009
+                }
+            }
+        ))
+        fig_signal.update_layout(height=300)
+        st.plotly_chart(fig_signal, use_container_width=True)
 
-st.set_page_config(page_title="Funding Rate Scanner", layout="wide") st.title("Funding Rate Sentiment Scanner — Binance Futures") st.markdown("A quick dashboard to scan perpetual futures funding rates and pick scalp candidates.")
+    # Detailed Data Table
+    st.markdown("---")
+    st.subheader("Detailed Network Metrics")
+    
+    metrics_data = {
+        "Metric": [
+            "Current Tor Percentage",
+            "Previous Tor Percentage", 
+            "Tor Trend",
+            "Network Signal",
+            "Active Nodes",
+            "Total Nodes",
+            "Previous Total Nodes",
+            "Tor Bias",
+            "Signal Bias"
+        ],
+        "Value": [
+            f"{results['current_tor_percentage']}%",
+            f"{results['previous_tor_percentage']}%",
+            f"{results['tor_trend']:.2f}%",
+            f"{results['network_signal']:.4f}",
+            f"{results['active_nodes']:,}",
+            f"{results['total_nodes']:,}",
+            f"{results['previous_total_nodes']:,}",
+            results['tor_bias'],
+            results['signal_bias']
+        ]
+    }
+    
+    df = pd.DataFrame(metrics_data)
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
---- Utility functions ---
+    # Interpretation Guide
+    st.markdown("---")
+    st.subheader("📊 Interpretation Guide")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        ### Tor Trend Analysis
+        - **📈 Tor Trend > 0%**: BEARISH (Sell Bias)
+          - Increasing privacy usage may indicate cautious market sentiment
+        - **📉 Tor Trend < 0%**: BULLISH (Buy Bias)  
+          - Decreasing privacy usage may indicate confident market sentiment
+        - **➡️ Tor Trend ≈ 0%**: NEUTRAL
+          - Stable privacy network usage
+        """)
+    
+    with col2:
+        st.markdown("""
+        ### Network Signal
+        - **🟢 Signal > 0**: BUY
+          - Network growth with high active node participation
+        - **🔴 Signal < 0**: SELL
+          - Network contraction or low participation
+        - **🟡 Signal ≈ 0**: SIDEWAYS
+          - Stable network conditions
+        """)
 
-@st.cache_data(ttl=60) def fetch_exchange_info() -> Dict: url = f"{BASE_BINANCE}/fapi/v1/exchangeInfo" r = requests.get(url, timeout=10) r.raise_for_status() return r.json()
+    # Timestamps
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    
+    def format_timestamp(timestamp):
+        return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    
+    with col1:
+        st.markdown(f"**Latest Snapshot:** {format_timestamp(results['latest_timestamp'])}")
+    with col2:
+        st.markdown(f"**Previous Snapshot:** {format_timestamp(results['previous_timestamp'])}")
+    
+    st.markdown(f"*Last analyzed: {results['timestamp']}*")
 
-@st.cache_data(ttl=15) def fetch_latest_funding(symbol: str) -> Dict: """Return the most recent funding record for a symbol. Uses limit=1.""" url = f"{BASE_BINANCE}/fapi/v1/fundingRate" params = {"symbol": symbol, "limit": 1} r = requests.get(url, params=params, timeout=10) r.raise_for_status() data = r.json() if isinstance(data, list) and len(data) > 0: return data[0] return {}
+except Exception as e:
+    st.error(f"Application error: {str(e)}")
+    st.info("Please try refreshing the data or check your internet connection.")
 
-def build_symbol_list() -> List[str]: info = fetch_exchange_info() symbols = [] for s in info.get("symbols", []): # We want perp USDT-margined contracts. Filter common patterns. sym = s.get("symbol") contract_type = s.get("contractType") or s.get("contractType", "") # Many exchanges show USDT perpetuals as symbols ending with 'USDT'. if not sym: continue if sym.endswith("USDT"): symbols.append(sym) # Deduplicate and sort symbols = sorted(list(set(symbols))) return symbols
-
---- Sidebar controls ---
-
-st.sidebar.header("Scanner settings") max_symbols = st.sidebar.slider("Max symbols to scan", 10, 200, 60, step=10) fr_threshold = st.sidebar.number_input("FR threshold (absolute, %)", min_value=0.001, max_value=5.0, value=0.05, step=0.01) refresh_secs = st.sidebar.slider("Auto-refresh (seconds)", 0, 300, 0, step=5) show_only = st.sidebar.selectbox("Show only", ["All", "Overbullish (>threshold)", "Overbearish (<-threshold)"]) sort_by = st.sidebar.selectbox("Sort by", ["abs_fr", "fundingRate", "symbol"])
-
-st.sidebar.markdown("---") st.sidebar.markdown("Developer notes: Uses Binance /fapi/v1/fundingRate (limit=1). Avoid setting very low auto-refresh with many symbols to stay within rate limits.")
-
---- Main logic ---
-
-symbols = build_symbol_list() symbols = symbols[:max_symbols]
-
-if st.sidebar.button("Refresh now"): # clear caches fetch_latest_funding.clear() fetch_exchange_info.clear()
-
-progress = st.progress(0) rows = [] for i, sym in enumerate(symbols): try: rec = fetch_latest_funding(sym) except Exception as e: rec = {} funding_rate = float(rec.get("fundingRate", 0.0)) if rec else 0.0 next_funding_time = rec.get("fundingTime") if rec else None # FRSS = funding_rate * 100 frss = funding_rate * 100 rows.append({ "symbol": sym, "fundingRate": funding_rate, "FRSS_%": frss, "nextFundingTime": next_funding_time, "raw": rec, "abs_fr": abs(frss), }) # update progress if max_symbols > 0: progress.progress((i + 1) / len(symbols))
-
-if len(rows) == 0: st.warning("No symbols found or API failed. Try refresh or reduce the max symbols.") st.stop()
-
-df = pd.DataFrame(rows)
-
-classification
-
-threshold = float(fr_threshold)
-
-def classify(fr): if fr > threshold: return "Overbullish" if fr < -threshold: return "Overbearish" return "Neutral"
-
-df["sentiment"] = df["FRSS_%"].apply(classify)
-
-filters
-
-if show_only != "All": if "Overbullish" in show_only: df = df[df.sentiment == "Overbullish"] elif "Overbearish" in show_only: df = df[df.sentiment == "Overbearish"]
-
-sorting
-
-if sort_by == "abs_fr": df = df.sort_values("abs_fr", ascending=False) elif sort_by == "fundingRate": df = df.sort_values("fundingRate", ascending=False) else: df = df.sort_values("symbol")
-
-Display table
-
-st.subheader(f"Scanned symbols: {len(df)} (threshold ±{threshold}%)")
-
-Highlight styling
-
-def highlight_row(r): if r.sentiment == "Overbullish": return ["background-color: #ffdede"] * len(r) if r.sentiment == "Overbearish": return ["background-color: #e6ffd9"] * len(r) return [""] * len(r)
-
-st.dataframe(df[["symbol", "fundingRate", "FRSS_%", "sentiment"]].rename(columns={"FRSS_%": "FRSS (%)", "fundingRate": "fundingRate (raw)"}), height=600)
-
-Quick action area
-
-st.markdown("---") col1, col2 = st.columns([1, 2]) with col1: st.write("Top candidates") top = df.head(10) st.table(top[["symbol", "FRSS_%", "sentiment"]].set_index("symbol")) with col2: st.write("How to use") st.markdown( """
-
-Overbullish (FRSS > threshold): crowd is long -> consider short scalp setups if price structure supports it.
-
-Overbearish (FRSS < -threshold): crowd is short -> consider long scalp setups.
-
-Always confirm with price action, volume and liquidity zones before entering.
-
-Avoid using very large position sizes — this is a sentiment scanner not a signal generator. """ )
-
-
-Auto refresh logic (client-side)
-
-if refresh_secs > 0: st.experimental_rerun()
-
-st.markdown("---") st.caption("Notes: Uses Binance public endpoints. If you need more features (websocket, Coinglass aggregated FR, historical averaging), I can extend this.")
+# Auto-refresh option
+st.sidebar.markdown("---")
+auto_refresh = st.sidebar.checkbox("Auto-refresh every 5 minutes")
+if auto_refresh:
+    time.sleep(300)
+    st.rerun()
