@@ -1,444 +1,911 @@
 import streamlit as st
 import requests
 import pandas as pd
-import plotly.graph_objects as go
-from datetime import datetime
-import time
 import json
+import os
+from datetime import datetime, timedelta
+import plotly.graph_objects as go
+import plotly.express as px
 
-# Page configuration
+# GODZILLERS Streamlit setup
 st.set_page_config(
-    page_title="Bitcoin Network Analysis",
-    page_icon="₿",
+    page_title="🔥 GODZILLERS CRYPTO TRACKER",
+    page_icon="🐲",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-class BitnodesAnalyzer:
-    def __init__(self):
-        self.base_url = "https://bitnodes.io/api/v1"
-    
-    def fetch_real_data(self):
-        """Fetch real data from Bitnodes API"""
-        try:
-            # Get the latest snapshots
-            snapshots_url = f"{self.base_url}/snapshots/?limit=5"
-            response = requests.get(snapshots_url, timeout=30)
-            response.raise_for_status()
-            snapshots_data = response.json()
-            
-            if not snapshots_data.get('results'):
-                return None, "No snapshot data available"
-            
-            # Get the two most recent snapshots
-            latest_snapshot = snapshots_data['results'][0]
-            previous_snapshot = snapshots_data['results'][1]
-            
-            # Fetch detailed data for latest snapshot
-            latest_url = latest_snapshot['url']
-            latest_response = requests.get(latest_url, timeout=30)
-            latest_response.raise_for_status()
-            latest_data = latest_response.json()
-            
-            # Fetch detailed data for previous snapshot  
-            previous_url = previous_snapshot['url']
-            previous_response = requests.get(previous_url, timeout=30)
-            previous_response.raise_for_status()
-            previous_data = previous_response.json()
-            
-            return {
-                'latest': latest_data,
-                'previous': previous_data,
-                'latest_timestamp': latest_snapshot['timestamp'],
-                'previous_timestamp': previous_snapshot['timestamp']
-            }, None
-            
-        except Exception as e:
-            return None, f"API Error: {str(e)}"
-    
-    def calculate_tor_percentage(self, nodes_data):
-        """Calculate real Tor percentage from nodes data"""
-        try:
-            if not nodes_data:
-                return 0
-                
-            total_nodes = len(nodes_data)
-            tor_nodes = 0
-            
-            for node in nodes_data:
-                if isinstance(node, list) and len(node) > 0:
-                    node_address = node[0]
-                    if '.onion' in str(node_address):
-                        tor_nodes += 1
-            
-            tor_percentage = (tor_nodes / total_nodes) * 100
-            return round(tor_percentage, 2)
-        except Exception:
-            return 0
-    
-    def calculate_network_signal(self, current_data, previous_data):
-        """Calculate network signal using the real formula"""
-        try:
-            # Formula: Signal = (Active Nodes ÷ Total Nodes) × ((Current Total Nodes − Previous Total Nodes) ÷ Previous Total Nodes)
-            
-            # Active nodes = total_nodes in Bitnodes response (they're all active/online)
-            active_nodes = current_data.get('total_nodes', 0)
-            current_total_nodes = current_data.get('total_nodes', 0)
-            previous_total_nodes = previous_data.get('total_nodes', 0)
-            
-            if previous_total_nodes == 0:
-                return 0
-            
-            active_ratio = active_nodes / current_total_nodes
-            growth_ratio = (current_total_nodes - previous_total_nodes) / previous_total_nodes
-            
-            signal = active_ratio * growth_ratio
-            return round(signal, 6)  # More precision for small values
-            
-        except Exception:
-            return 0
-    
-    def get_market_bias(self, tor_trend, network_signal):
-        """Determine market bias based on real trends"""
-        tor_bias = "NEUTRAL"
-        if tor_trend > 0:
-            tor_bias = "BEARISH (Sell Bias)"
-        elif tor_trend < 0:
-            tor_bias = "BULLISH (Buy Bias)"
-        
-        signal_bias = "SIDEWAYS"
-        if network_signal > 0:
-            signal_bias = "BUY"
-        elif network_signal < 0:
-            signal_bias = "SELL"
-        
-        return tor_bias, signal_bias
-    
-    def analyze_network(self):
-        """Main analysis with real data"""
-        try:
-            # Fetch real data
-            snapshots, error = self.fetch_real_data()
-            if error:
-                return None, error
-            
-            latest_data = snapshots['latest']
-            previous_data = snapshots['previous']
-            
-            # Calculate real Tor percentages
-            current_tor_pct = self.calculate_tor_percentage(latest_data.get('nodes', []))
-            previous_tor_pct = self.calculate_tor_percentage(previous_data.get('nodes', []))
-            
-            # Calculate Tor trend
-            tor_trend = 0
-            if previous_tor_pct > 0:
-                tor_trend = ((current_tor_pct - previous_tor_pct) / previous_tor_pct) * 100
-            
-            # Calculate real network signal
-            network_signal = self.calculate_network_signal(latest_data, previous_data)
-            
-            # Get market biases
-            tor_bias, signal_bias = self.get_market_bias(tor_trend, network_signal)
-            
-            # Prepare results
-            results = {
-                'current_tor_percentage': current_tor_pct,
-                'previous_tor_percentage': previous_tor_pct,
-                'tor_trend': round(tor_trend, 2),
-                'active_nodes': latest_data.get('total_nodes', 0),
-                'total_nodes': latest_data.get('total_nodes', 0),
-                'previous_total_nodes': previous_data.get('total_nodes', 0),
-                'network_signal': network_signal,
-                'tor_bias': tor_bias,
-                'signal_bias': signal_bias,
-                'latest_timestamp': snapshots['latest_timestamp'],
-                'previous_timestamp': snapshots['previous_timestamp'],
-                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'data_source': 'Bitnodes.io API'
-            }
-            
-            return results, None
-            
-        except Exception as e:
-            return None, f"Analysis error: {str(e)}"
-
-# Initialize analyzer
-analyzer = BitnodesAnalyzer()
-
-# Custom CSS
+# GODZILLERS CSS with red and black theme - UPDATED FOR BETTER LOGIN
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        background: linear-gradient(45deg, #FF6B00, #F7931A);
+    /* Hide all Streamlit elements on login page */
+    .login-page .main > div {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    .login-page #MainMenu {visibility: hidden;}
+    .login-page header {visibility: hidden;}
+    .login-page footer {visibility: hidden;}
+    .login-page .stAppView {padding: 0 !important; margin: 0 !important;}
+    
+    .main {
+        background: linear-gradient(135deg, #000000 0%, #1a0000 50%, #330000 100%);
+        color: #ffffff;
+        font-family: 'Rajdhani', sans-serif;
+    }
+    
+    .stApp {
+        background: linear-gradient(135deg, #000000 0%, #1a0000 50%, #330000 100%);
+    }
+    
+    .godzillers-header {
+        background: linear-gradient(90deg, #ff0000 0%, #ff4444 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+        font-family: 'Orbitron', monospace;
+        font-weight: 900;
         text-align: center;
-        margin-bottom: 1rem;
+        font-size: 4rem;
+        margin-bottom: 0.5rem;
+        text-shadow: 0 0 30px rgba(255, 0, 0, 0.7);
+        letter-spacing: 3px;
     }
-    .metric-card {
-        background: rgba(255, 255, 255, 0.1);
+    
+    .godzillers-subheader {
+        color: #ff6666;
+        font-family: 'Orbitron', monospace;
+        text-align: center;
+        font-size: 1.4rem;
+        margin-bottom: 2rem;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+    }
+    
+    .godzillers-card {
+        background: rgba(20, 0, 0, 0.9);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 0, 0, 0.5);
         border-radius: 15px;
         padding: 1.5rem;
-        border-left: 4px solid #F7931A;
-        margin-bottom: 1rem;
+        margin: 0.5rem 0;
+        box-shadow: 0 8px 32px rgba(255, 0, 0, 0.3);
+        transition: all 0.3s ease;
     }
-    .tor-card {
-        border-left-color: #8B4513;
+    
+    .godzillers-card:hover {
+        border-color: #ff4444;
+        box-shadow: 0 8px 32px rgba(255, 0, 0, 0.5);
+        transform: translateY(-2px);
     }
-    .signal-card {
-        border-left-color: #0064C8;
-    }
-    .metric-value {
-        font-size: 2.5rem;
-        font-weight: bold;
-        margin: 10px 0;
-    }
-    .metric-label {
-        font-size: 1rem;
-        opacity: 0.8;
-        margin-bottom: 5px;
-    }
-    .trend-up {
-        color: #00D4AA;
-        font-weight: bold;
-    }
-    .trend-down {
-        color: #FF4B4B;
-        font-weight: bold;
-    }
+    
     .signal-buy {
-        color: #00D4AA;
-        font-weight: bold;
-        background: rgba(0, 212, 170, 0.2);
-        padding: 8px 16px;
-        border-radius: 20px;
-        display: inline-block;
+        background: linear-gradient(135deg, rgba(0, 255, 0, 0.1) 0%, rgba(0, 100, 0, 0.3) 100%);
+        border: 1px solid #00ff00;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin: 0.5rem 0;
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
     }
+    
     .signal-sell {
-        color: #FF4B4B;
-        font-weight: bold;
-        background: rgba(255, 75, 75, 0.2);
-        padding: 8px 16px;
-        border-radius: 20px;
-        display: inline-block;
+        background: linear-gradient(135deg, rgba(255, 0, 0, 0.2) 0%, rgba(100, 0, 0, 0.4) 100%);
+        border: 1px solid #ff0000;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin: 0.5rem 0;
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
     }
-    .bias-bearish {
-        color: #FF4B4B;
-        font-weight: bold;
-        background: rgba(255, 75, 75, 0.2);
-        padding: 8px 16px;
-        border-radius: 20px;
-        display: inline-block;
+    
+    .signal-neutral {
+        background: linear-gradient(135deg, rgba(255, 165, 0, 0.1) 0%, rgba(100, 65, 0, 0.3) 100%);
+        border: 1px solid #ffa500;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin: 0.5rem 0;
+        box-shadow: 0 0 20px rgba(255, 165, 0, 0.3);
     }
-    .bias-bullish {
-        color: #00D4AA;
-        font-weight: bold;
-        background: rgba(0, 212, 170, 0.2);
-        padding: 8px 16px;
-        border-radius: 20px;
-        display: inline-block;
+    
+    .price-glow {
+        background: linear-gradient(135deg, rgba(255, 0, 0, 0.15) 0%, rgba(139, 0, 0, 0.25) 100%);
+        border: 1px solid rgba(255, 0, 0, 0.6);
+        border-radius: 15px;
+        padding: 2rem;
+        margin: 1rem 0;
+        box-shadow: 0 0 40px rgba(255, 0, 0, 0.4);
+        position: relative;
+        overflow: hidden;
     }
-    .bias-neutral {
-        color: #FFA500;
-        font-weight: bold;
-        background: rgba(255, 165, 0, 0.2);
-        padding: 8px 16px;
+    
+    .price-glow::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: linear-gradient(45deg, transparent, rgba(255, 0, 0, 0.1), transparent);
+        animation: shine 3s infinite linear;
+    }
+    
+    @keyframes shine {
+        0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+        100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+    }
+    
+    .godzillers-button {
+        background: linear-gradient(90deg, #ff0000 0%, #cc0000 100%);
+        border: none;
+        border-radius: 25px;
+        color: #000000;
+        font-family: 'Orbitron', monospace;
+        font-weight: 700;
+        padding: 0.75rem 2rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .godzillers-button:hover {
+        background: linear-gradient(90deg, #ff4444 0%, #ff0000 100%);
+        transform: scale(1.05);
+        box-shadow: 0 0 30px rgba(255, 0, 0, 0.7);
+        color: #000000;
+    }
+    
+    .metric-godzillers {
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255, 0, 0, 0.3);
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+    }
+    
+    .trademark {
+        text-align: center;
+        color: #ff6666;
+        font-family: 'Orbitron', monospace;
+        font-size: 0.9rem;
+        margin-top: 2rem;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+    }
+    
+    .section-header {
+        font-family: 'Orbitron', monospace;
+        font-size: 2rem;
+        background: linear-gradient(90deg, #ff0000 0%, #ff4444 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 2rem 0 1rem 0;
+        text-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+    
+    .divider {
+        height: 3px;
+        background: linear-gradient(90deg, transparent 0%, #ff0000 50%, transparent 100%);
+        margin: 2rem 0;
+    }
+    
+    .pulse {
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+    
+    .coin-card {
+        background: rgba(30, 0, 0, 0.9);
+        border: 1px solid rgba(255, 0, 0, 0.3);
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 0.5rem;
+        transition: all 0.3s ease;
+    }
+    
+    .coin-card:hover {
+        border-color: #ff0000;
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
+        transform: translateY(-3px);
+    }
+    
+    .fire-effect {
+        background: linear-gradient(45deg, #ff0000, #ff4400, #ff0000);
+        background-size: 200% 200%;
+        animation: fire 2s ease infinite;
+    }
+    
+    @keyframes fire {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    .alert-banner {
+        background: linear-gradient(90deg, #ff0000, #cc0000);
+        border: 2px solid #ff4444;
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 1rem 0;
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+        animation: pulse 2s infinite;
+    }
+    
+    /* Login Page Styles - SIMPLIFIED AND CENTERED */
+    .login-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #000000 0%, #1a0000 50%, #330000 100%);
+        padding: 20px;
+    }
+    
+    .login-card {
+        background: rgba(20, 0, 0, 0.95);
+        backdrop-filter: blur(10px);
+        border: 2px solid rgba(255, 0, 0, 0.6);
         border-radius: 20px;
-        display: inline-block;
+        padding: 3rem;
+        width: 100%;
+        max-width: 450px;
+        box-shadow: 0 0 50px rgba(255, 0, 0, 0.5);
+        text-align: center;
+    }
+    
+    .login-header {
+        background: linear-gradient(90deg, #ff0000 0%, #ff4444 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-family: 'Orbitron', monospace;
+        font-weight: 900;
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        text-shadow: 0 0 20px rgba(255, 0, 0, 0.7);
+    }
+    
+    .login-subheader {
+        color: #ff6666;
+        font-family: 'Orbitron', monospace;
+        font-size: 1rem;
+        margin-bottom: 2rem;
+        letter-spacing: 2px;
+    }
+    
+    .login-input {
+        background: rgba(0, 0, 0, 0.8);
+        border: 1px solid rgba(255, 0, 0, 0.5);
+        border-radius: 10px;
+        color: white;
+        font-family: 'Rajdhani', sans-serif;
+        padding: 0.75rem 1rem;
+        margin: 0.5rem 0;
+        width: 100%;
+        font-size: 1rem;
+    }
+    
+    .login-input:focus {
+        outline: none;
+        border-color: #ff0000;
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+    }
+    
+    .login-button {
+        background: linear-gradient(90deg, #ff0000 0%, #cc0000 100%);
+        border: none;
+        border-radius: 25px;
+        color: #000000;
+        font-family: 'Orbitron', monospace;
+        font-weight: 700;
+        padding: 0.75rem 2rem;
+        margin: 1rem 0;
+        width: 100%;
+        transition: all 0.3s ease;
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-size: 1.1rem;
+    }
+    
+    .login-button:hover {
+        background: linear-gradient(90deg, #ff4444 0%, #ff0000 100%);
+        transform: scale(1.05);
+        box-shadow: 0 0 30px rgba(255, 0, 0, 0.7);
+    }
+    
+    .logout-button {
+        background: linear-gradient(90deg, #ff0000 0%, #cc0000 100%);
+        border: none;
+        border-radius: 10px;
+        color: #000000;
+        font-family: 'Orbitron', monospace;
+        font-weight: 700;
+        padding: 0.5rem 1rem;
+        margin: 1rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-size: 0.8rem;
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+    }
+    
+    /* Custom metric styling */
+    [data-testid="stMetricValue"] {
+        font-family: 'Orbitron', monospace;
+        font-weight: 700;
+        color: #ff4444;
+    }
+    
+    [data-testid="stMetricLabel"] {
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 600;
+        color: #ff8888;
+    }
+    
+    [data-testid="stMetricDelta"] {
+        font-family: 'Orbitron', monospace;
+    }
+    
+    .dragon-emoji {
+        font-size: 2rem;
+        text-shadow: 0 0 10px #ff0000;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Header
-st.markdown('<div class="main-header">₿ Bitcoin Network Analysis</div>', unsafe_allow_html=True)
-st.markdown("### Real-time Tor Node Tracking & Network Signals")
+# Simple authentication system
+def check_credentials(username, password):
+    """Check if username and password are correct"""
+    # In a real application, use proper password hashing and secure storage
+    valid_users = {
+        "godziller": "dragonfire2025",
+        "admin": "cryptoking",
+        "trader": "bullmarket"
+    }
+    return username in valid_users and valid_users[username] == password
 
-# Sidebar
-with st.sidebar:
-    st.image("https://bitcoin.org/img/icons/opengraph.png", width=80)
-    st.title("Controls")
+def login_page():
+    """Display login page - SIMPLIFIED VERSION"""
+    # Clear any existing content
+    st.markdown("""
+    <style>
+    .main .block-container {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
-    if st.button("🔄 Refresh Real Data", use_container_width=True, type="primary"):
+    # Create centered login form directly
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("""
+        <div style='
+            background: rgba(20, 0, 0, 0.95);
+            border: 2px solid rgba(255, 0, 0, 0.6);
+            border-radius: 20px;
+            padding: 3rem;
+            box-shadow: 0 0 50px rgba(255, 0, 0, 0.5);
+            text-align: center;
+            margin: 2rem 0;
+        '>
+            <h1 style='
+                background: linear-gradient(90deg, #ff0000 0%, #ff4444 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                font-family: Orbitron, monospace;
+                font-weight: 900;
+                font-size: 2.5rem;
+                margin-bottom: 1rem;
+                text-shadow: 0 0 20px rgba(255, 0, 0, 0.7);
+            '>🐲 GODZILLERS</h1>
+            <p style='
+                color: #ff6666;
+                font-family: Orbitron, monospace;
+                font-size: 1rem;
+                margin-bottom: 2rem;
+                letter-spacing: 2px;
+            '>PRIVATE CRYPTO WARFARE SYSTEM</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.form("login_form"):
+            username = st.text_input("👤 DRAGON NAME", placeholder="Enter your dragon name...")
+            password = st.text_input("🔐 FIRE BREATH", type="password", placeholder="Enter your fire breath...")
+            
+            login_button = st.form_submit_button("🔥 IGNITE DRAGON FIRE", use_container_width=True)
+            
+            if login_button:
+                if check_credentials(username, password):
+                    st.session_state.logged_in = True
+                    st.session_state.username = username
+                    st.success("✅ Dragon fire ignited! Access granted.")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid dragon name or fire breath!")
+
+def get_crypto_prices():
+    """Get crypto prices from multiple sources with fallback"""
+    coins = {
+        'BTCUSDT': 'bitcoin',
+        'ETHUSDT': 'ethereum', 
+        'ADAUSDT': 'cardano'
+    }
+    
+    prices = {}
+    
+    try:
+        # Try Binance first for all coins
+        for symbol in coins.keys():
+            try:
+                response = requests.get(f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}", timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    prices[symbol] = float(data['price'])
+                else:
+                    prices[symbol] = None
+            except Exception as e:
+                prices[symbol] = None
+        
+        # Fill missing prices with CoinGecko
+        missing_coins = [coin_id for symbol, coin_id in coins.items() if prices.get(symbol) is None]
+        if missing_coins:
+            try:
+                coin_ids = ','.join(missing_coins)
+                response = requests.get(f"https://api.coingecko.com/api/v3/simple/price?ids={coin_ids}&vs_currencies=usd", timeout=5)
+                if response.status_code == 200:
+                    gecko_data = response.json()
+                    for symbol, coin_id in coins.items():
+                        if prices.get(symbol) is None and coin_id in gecko_data:
+                            prices[symbol] = float(gecko_data[coin_id]['usd'])
+            except Exception as e:
+                # If CoinGecko fails, set default prices
+                for symbol in coins:
+                    if prices.get(symbol) is None:
+                        prices[symbol] = 0.0
+                
+    except Exception as e:
+        st.error(f"Error fetching prices: {str(e)}")
+        # Set default prices if everything fails
+        for symbol in coins:
+            prices[symbol] = 0.0
+    
+    return prices
+
+class CryptoAnalyzer:
+    def __init__(self):
+        self.snapshots_url = "https://bitnodes.io/api/v1/snapshots/"
+    
+    def calculate_tor_percentage(self, snapshot):
+        """Calculate Tor percentage from snapshot data"""
+        total_nodes = snapshot['total_nodes']
+        tor_nodes = sum(1 for node in snapshot['nodes'] if ".onion" in str(node))
+        return (tor_nodes / total_nodes) * 100 if total_nodes > 0 else 0
+    
+    def fetch_snapshot_data(self):
+        """Fetch latest two snapshots and calculate metrics"""
+        try:
+            # Fetch snapshot list
+            snapshots_response = requests.get(self.snapshots_url, timeout=10)
+            if snapshots_response.status_code != 200:
+                st.error(f"Failed to fetch snapshots: {snapshots_response.status_code}")
+                return None
+            
+            snapshots = snapshots_response.json()['results']
+            
+            if len(snapshots) < 2:
+                st.error("Not enough snapshots available")
+                return None
+            
+            # Latest snapshot
+            current_snapshot_hash = snapshots[0][0]
+            previous_snapshot_hash = snapshots[1][0]
+            
+            # Fetch snapshot details
+            current_response = requests.get(f"https://bitnodes.io/api/v1/snapshots/{current_snapshot_hash}/", timeout=10)
+            previous_response = requests.get(f"https://bitnodes.io/api/v1/snapshots/{previous_snapshot_hash}/", timeout=10)
+            
+            if current_response.status_code != 200 or previous_response.status_code != 200:
+                st.error("Failed to fetch snapshot details")
+                return None
+            
+            current_data = current_response.json()
+            previous_data = previous_response.json()
+            
+            # Calculate Tor percentages
+            current_tor = self.calculate_tor_percentage(current_data)
+            previous_tor = self.calculate_tor_percentage(previous_data)
+            tor_trend = ((current_tor - previous_tor) / previous_tor * 100) if previous_tor > 0 else 0
+            
+            # Calculate active nodes and network signal
+            active_nodes = sum(1 for node in current_data['nodes'] if current_data['nodes'][node])
+            current_total = current_data['total_nodes']
+            previous_total = previous_data['total_nodes']
+            
+            network_signal = (active_nodes / current_total) * ((current_total - previous_total) / previous_total) if previous_total > 0 else 0
+            
+            return {
+                'current_tor': current_tor,
+                'previous_tor': previous_tor,
+                'tor_trend': tor_trend,
+                'active_nodes': active_nodes,
+                'current_total': current_total,
+                'previous_total': previous_total,
+                'network_signal': network_signal,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            st.error(f"Error fetching snapshot data: {e}")
+            return None
+    
+    def calculate_tor_signal(self, current_tor, previous_tor, tor_trend):
+        """Calculate signal based on Tor percentage changes"""
+        tor_pct_change = current_tor - previous_tor
+        
+        # TOR PERCENTAGE SIGNAL LOGIC
+        if tor_pct_change >= 1.0:  # Tor percentage increased by 1.0% or more
+            signal = "🐲 GODZILLA DUMP 🐲"
+            bias = "EXTREME BEARISH"
+        elif tor_pct_change >= 0.5:  # Tor percentage increased by 0.5-0.99%
+            signal = "🔥 STRONG SELL 🔥"
+            bias = "VERY BEARISH"
+        elif tor_pct_change >= 0.1:  # Tor percentage increased by 0.1-0.49%
+            signal = "SELL"
+            bias = "BEARISH"
+        elif tor_pct_change <= -1.0:  # Tor percentage decreased by 1.0% or more
+            signal = "🐲 GODZILLA PUMP 🐲"
+            bias = "EXTREME BULLISH"
+        elif tor_pct_change <= -0.5:  # Tor percentage decreased by 0.5-0.99%
+            signal = "🚀 STRONG BUY 🚀"
+            bias = "VERY BULLISH"
+        elif tor_pct_change <= -0.1:  # Tor percentage decreased by 0.1-0.49%
+            signal = "BUY"
+            bias = "BULLISH"
+        else:  # Change between -0.1% and +0.1%
+            signal = "HOLD"
+            bias = "NEUTRAL"
+        
+        return {
+            'current_tor_pct': current_tor,
+            'previous_tor_pct': previous_tor,
+            'tor_pct_change': tor_pct_change,
+            'tor_trend': tor_trend,
+            'signal': signal,
+            'bias': bias
+        }
+
+def get_coin_display_name(symbol):
+    """Get display name for crypto symbols"""
+    names = {
+        'BTCUSDT': 'Bitcoin',
+        'ETHUSDT': 'Ethereum',
+        'ADAUSDT': 'Cardano'
+    }
+    return names.get(symbol, symbol)
+
+def get_coin_emoji(symbol):
+    """Get emoji for crypto symbols - GODZILLERS theme"""
+    emojis = {
+        'BTCUSDT': '🐲',
+        'ETHUSDT': '🔥',
+        'ADAUSDT': '🎯'
+    }
+    return emojis.get(symbol, '💀')
+
+def main_app():
+    """Main application after login"""
+    # Initialize analyzer
+    analyzer = CryptoAnalyzer()
+    
+    # Logout button
+    if st.button("🚪 LOGOUT", key="logout", use_container_width=False):
+        st.session_state.logged_in = False
+        st.session_state.username = None
         st.rerun()
     
-    st.markdown("---")
-    st.markdown("### Formulas")
-    st.markdown("""
-    **Tor %** = (Tor Nodes / Total Nodes) × 100
+    # Welcome message
+    st.markdown(f'<p style="text-align: right; color: #ff4444; font-family: Orbitron; margin: 0.5rem 1rem;">Welcome, {st.session_state.username}!</p>', unsafe_allow_html=True)
     
-    **Signal** = (Active Nodes ÷ Total Nodes) × 
-                ((Current Nodes − Previous Nodes) ÷ Previous Nodes)
+    # GODZILLERS Header
+    st.markdown('<h1 class="godzillers-header">🔥 GODZILLERS CRYPTO TRACKER</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="godzillers-subheader">Godzillers Eye SIGNALS • TOR PERCENTAGE ANALYSIS • RED HOT PRICES</p>', unsafe_allow_html=True)
     
-    **Tor Trend** = ((Current Tor % − Previous Tor %) ÷ Previous Tor %) × 100
-    """)
+    # LIVE CRYPTO PRICES SECTION
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown('<h2 class="section-header">💰 DRAGON FIRE PRICES</h2>', unsafe_allow_html=True)
     
-    st.markdown("---")
-    st.markdown("### Data Source")
-    st.markdown("[Bitnodes.io API](https://bitnodes.io/)")
-
-# Main content
-try:
-    # Fetch real data
-    with st.spinner('📡 Fetching real data from Bitnodes API...'):
-        results, error = analyzer.analyze_network()
+    # Get all crypto prices
+    prices = get_crypto_prices()
     
-    if error:
-        st.error(f"❌ Error fetching real data: {error}")
-        st.info("This might be due to:")
-        st.info("• API rate limiting")
-        st.info("• Network connectivity issues")
-        st.info("• Bitnodes API changes")
-        st.info("Please try refreshing in a few moments.")
-    else:
-        # Display real metrics
-        st.success(f"✅ Real data fetched from Bitnodes API")
-        
-        # Key metrics row
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown('<div class="metric-card tor-card">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">Current Tor Percentage</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{results["current_tor_percentage"]}%</div>', unsafe_allow_html=True)
-            
-            # Tor trend
-            trend_class = "trend-up" if results["tor_trend"] > 0 else "trend-down"
-            trend_symbol = "↗️" if results["tor_trend"] > 0 else "↘️"
-            st.markdown(f'<div class="{trend_class}">{trend_symbol} Trend: {results["tor_trend"]:.2f}%</div>', unsafe_allow_html=True)
-            
-            # Tor bias
-            bias_class = "bias-bearish" if "BEARISH" in results["tor_bias"] else "bias-bullish" if "BULLISH" in results["tor_bias"] else "bias-neutral"
-            st.markdown(f'<div class="{bias_class}" style="margin-top: 10px;">{results["tor_bias"]}</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown('<div class="metric-card signal-card">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">Network Signal</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{results["network_signal"]:.6f}</div>', unsafe_allow_html=True)
-            
-            # Signal bias
-            signal_class = "signal-buy" if results["signal_bias"] == "BUY" else "signal-sell" if results["signal_bias"] == "SELL" else "bias-neutral"
-            st.markdown(f'<div class="{signal_class}">{results["signal_bias"]} SIGNAL</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Additional metrics row
-        col3, col4 = st.columns(2)
-        
-        with col3:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">Previous Tor Percentage</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{results["previous_tor_percentage"]}%</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">Node Statistics</div>', unsafe_allow_html=True)
-            st.markdown(f'**Active Nodes:** {results["active_nodes"]:,}')
-            st.markdown(f'**Total Nodes:** {results["total_nodes"]:,}')
-            st.markdown(f'**Previous Total Nodes:** {results["previous_total_nodes"]:,}')
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with col4:
-            # Network signal calculation breakdown
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">Signal Calculation</div>', unsafe_allow_html=True)
-            
-            active_ratio = results["active_nodes"] / results["total_nodes"]
-            growth_ratio = (results["total_nodes"] - results["previous_total_nodes"]) / results["previous_total_nodes"]
-            
-            st.markdown(f"""
-            ```
-            Active Ratio = {active_ratio:.4f}
-            Growth Ratio = {growth_ratio:.6f}
-            Signal = {active_ratio:.4f} × {growth_ratio:.6f}
-            Signal = {results["network_signal"]:.6f}
-            ```
-            """)
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Visualizations
-        st.markdown("## 📊 Real Data Visualizations")
-        
-        # Tor comparison chart
-        fig_tor = go.Figure()
-        fig_tor.add_trace(go.Bar(
-            name='Current Tor %',
-            x=['Tor Nodes'],
-            y=[results['current_tor_percentage']],
-            marker_color='#F7931A',
-            text=[f"{results['current_tor_percentage']}%"],
-            textposition='auto',
-        ))
-        fig_tor.add_trace(go.Bar(
-            name='Previous Tor %', 
-            x=['Previous'],
-            y=[results['previous_tor_percentage']],
-            marker_color='#8B4513',
-            text=[f"{results['previous_tor_percentage']}%"],
-            textposition='auto',
-        ))
-        fig_tor.update_layout(
-            title="Real Tor Percentage Comparison",
-            showlegend=True,
-            height=400
-        )
-        st.plotly_chart(fig_tor, use_container_width=True)
-        
-        # Network nodes trend
-        fig_nodes = go.Figure()
-        fig_nodes.add_trace(go.Indicator(
-            mode = "number+delta",
-            value = results['total_nodes'],
-            number = {'valueformat': ','},
-            delta = {'reference': results['previous_total_nodes'], 'relative': False},
-            title = {"text": "Total Nodes Trend"},
-            domain = {'row': 0, 'column': 0}
-        ))
-        fig_nodes.update_layout(
-            grid = {'rows': 1, 'columns': 1, 'pattern': "independent"},
-            height=200
-        )
-        st.plotly_chart(fig_nodes, use_container_width=True)
-        
-        # Raw data preview
-        st.markdown("## 🔍 Raw Data Preview")
-        
-        with st.expander("Show calculation details"):
-            col1, col2 = st.columns(2)
+    if prices:
+        # Display BTC price prominently
+        btc_price = prices.get('BTCUSDT')
+        if btc_price and btc_price > 0:
+            st.markdown('<div class="price-glow">', unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([2, 1, 1])
             
             with col1:
-                st.markdown("**Current Snapshot:**")
-                st.json({
-                    "total_nodes": results["total_nodes"],
-                    "tor_percentage": results["current_tor_percentage"],
-                    "timestamp": datetime.fromtimestamp(results["latest_timestamp"]).strftime('%Y-%m-%d %H:%M:%S')
-                })
+                st.markdown(f'<div style="text-align: center;"><span style="font-family: Orbitron; font-size: 3rem; font-weight: 900; background: linear-gradient(90deg, #ff0000, #ff4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">${btc_price:,.2f}</span></div>', unsafe_allow_html=True)
+                st.markdown('<p style="text-align: center; color: #ff8888; font-family: Rajdhani;">BITCOIN PRICE (USD)</p>', unsafe_allow_html=True)
             
             with col2:
-                st.markdown("**Previous Snapshot:**")
-                st.json({
-                    "total_nodes": results["previous_total_nodes"], 
-                    "tor_percentage": results["previous_tor_percentage"],
-                    "timestamp": datetime.fromtimestamp(results["previous_timestamp"]).strftime('%Y-%m-%d %H:%M:%S')
-                })
+                st.metric(
+                    label="24H STATUS",
+                    value="🔥 LIVE",
+                    delta="Godzillers"
+                )
+            
+            with col3:
+                st.metric(
+                    label="DATA SOURCE", 
+                    value="BINANCE API",
+                    delta="RED HOT"
+                )
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.error("❌ Could not fetch Bitcoin price")
         
-        # Timestamps
-        st.markdown("---")
-        def format_timestamp(timestamp):
-            return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        # Display all coins in a grid
+        st.markdown('<h3 style="font-family: Orbitron; color: #ff4444; margin: 1rem 0;">📊 ALTCOIN BATTLEFIELD</h3>', unsafe_allow_html=True)
         
-        st.caption(f"**Latest Snapshot:** {format_timestamp(results['latest_timestamp'])}")
-        st.caption(f"**Previous Snapshot:** {format_timestamp(results['previous_timestamp'])}") 
-        st.caption(f"*Analysis performed: {results['timestamp']}*")
-        st.caption(f"**Data Source:** {results['data_source']}")
+        # Create columns for coin grid
+        coins_to_display = {k: v for k, v in prices.items() if k != 'BTCUSDT' and v and v > 0}
+        if coins_to_display:
+            # Use 2 columns for cleaner layout with fewer coins
+            cols = st.columns(2)
+            
+            for idx, (symbol, price) in enumerate(coins_to_display.items()):
+                if price:
+                    with cols[idx % 2]:
+                        emoji = get_coin_emoji(symbol)
+                        name = get_coin_display_name(symbol)            
+                        st.markdown(f'''
+                        <div class="coin-card">
+                            <div style="text-align: center;">
+                                <h4 style="font-family: Orbitron; color: #ff4444; margin: 0.5rem 0; font-size: 1.1rem;">{emoji} {name}</h4>
+                                <p style="font-family: Orbitron; font-size: 1.3rem; font-weight: 700; color: #ffffff; margin: 0.5rem 0;">${price:,.2f}</p>
+                                <p style="color: #ff8888; font-family: Rajdhani; font-size: 0.9rem; margin: 0;">{symbol}</p>
+                            </div>
+                        </div>
+                        ''', unsafe_allow_html=True)
+        else:
+            st.warning("⚠️ Could not fetch altcoin prices")
+        
+        st.markdown(f'<p style="text-align: center; color: #ff8888; font-family: Rajdhani;">🕒 Prices updated: {datetime.now().strftime("%H:%M:%S")}</p>', unsafe_allow_html=True)
+    else:
+        st.error("❌ Could not fetch crypto prices")
+    
+    # NODE DATA SECTION
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown('<h2 class="section-header">🔄 Godzillers EYE ANALYSIS</h2>', unsafe_allow_html=True)
+    with col2:
+        if st.button("🐉 UPDATE NODE DATA", key="refresh_main", use_container_width=True, type="primary"):
+            with st.spinner("🔥 Scanning network with dragon fire..."):
+                snapshot_data = analyzer.fetch_snapshot_data()
+                if snapshot_data:
+                    st.session_state.snapshot_data = snapshot_data
+                    st.success("✅ Node data updated successfully!")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to update node data")
+    
+    # Display current node data if available
+    if 'snapshot_data' in st.session_state:
+        snapshot_data = st.session_state.snapshot_data
+        current_time = datetime.fromisoformat(snapshot_data['timestamp'])
+        st.markdown(f'<p style="text-align: center; color: #ff4444; font-family: Rajdhani;">📊 Data updated: {current_time.strftime("%Y-%m-%d %H:%M:%S")}</p>', unsafe_allow_html=True)
+    
+    # TOR PERCENTAGE SIGNAL ANALYSIS
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown('<h2 class="section-header">🎯 Godzillers Eye SIGNALS</h2>', unsafe_allow_html=True)
+    
+    # Main content in two columns
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        # TOR PERCENTAGE COMPARISON
+        st.markdown('<div class="godzillers-card">', unsafe_allow_html=True)
+        st.markdown('<h3 style="font-family: Orbitron; color: #ff4444; text-align: center;">🔄 TOR PERCENTAGE BATTLE</h3>', unsafe_allow_html=True)
+        
+        if 'snapshot_data' in st.session_state:
+            snapshot_data = st.session_state.snapshot_data
+            tor_signal = analyzer.calculate_tor_signal(
+                snapshot_data['current_tor'], 
+                snapshot_data['previous_tor'], 
+                snapshot_data['tor_trend']
+            )
+            
+            col1a, col2a = st.columns(2)
+            
+            with col1a:
+                st.metric("🕒 PREVIOUS TOR %", f"{tor_signal['previous_tor_pct']:.2f}%")
+                st.metric("🕒 PREVIOUS TOTAL NODES", f"{snapshot_data['previous_total']:,}")
+            
+            with col2a:
+                st.metric("🔥 CURRENT TOR %", f"{tor_signal['current_tor_pct']:.2f}%")
+                st.metric("🔥 CURRENT TOTAL NODES", f"{snapshot_data['current_total']:,}")
+            
+            # Display changes
+            st.markdown('<div style="text-align: center; margin: 1rem 0;">', unsafe_allow_html=True)
+            st.metric("📈 TOR % CHANGE", f"{tor_signal['tor_pct_change']:+.2f}%", delta="percentage points")
+            st.metric("📈 TOR TREND", f"{tor_signal['tor_trend']:+.2f}%", delta="percentage change")
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("🔥 Update node data to see percentage comparison")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        # SIGNAL RESULTS
+        st.markdown('<div class="godzillers-card">', unsafe_allow_html=True)
+        st.markdown('<h3 style="font-family: Orbitron; color: #ff4444; text-align: center;">📊 WAR ROOM SIGNALS</h3>', unsafe_allow_html=True)
+        
+        if 'snapshot_data' in st.session_state:
+            snapshot_data = st.session_state.snapshot_data
+            tor_signal = analyzer.calculate_tor_signal(
+                snapshot_data['current_tor'], 
+                snapshot_data['previous_tor'], 
+                snapshot_data['tor_trend']
+            )
+            
+            # Current network stats
+            col1b, col2b = st.columns(2)
+            
+            with col1b:
+                st.metric("⚡ ACTIVE NODES", f"{snapshot_data['active_nodes']:,}")
+                st.metric("🌐 TOTAL NODES", f"{snapshot_data['current_total']:,}")
+            
+            with col2b:
+                st.metric("📊 NETWORK SIGNAL", f"{snapshot_data['network_signal']:.6f}")
+                st.metric("📈 NODE GROWTH", f"{(snapshot_data['current_total'] - snapshot_data['previous_total']):+,}")
+            
+            # Display signals
+            st.markdown('<div style="text-align: center; margin: 1rem 0;">', unsafe_allow_html=True)
+            st.metric("🎯 Godzillers SIGNAL", tor_signal['signal'])
+            st.metric("📡 BATTLE BIAS", tor_signal['bias'])
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("🔥 Update node data to see war room signals")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # MAIN SIGNAL DISPLAY WITH GODZILLERS THEME
+    if 'snapshot_data' in st.session_state:
+        snapshot_data = st.session_state.snapshot_data
+        tor_signal = analyzer.calculate_tor_signal(
+            snapshot_data['current_tor'], 
+            snapshot_data['previous_tor'], 
+            snapshot_data['tor_trend']
+        )
+        
+        # Display main signal with GODZILLERS styling
+        if "GODZILLA DUMP" in tor_signal['signal']:
+            signal_class = "signal-sell"
+            emoji = "🐲💀🔥"
+            explanation = "GODZILLA DUMP - Tor percentage exploding upward (Extreme Bearish)"
+        elif "STRONG SELL" in tor_signal['signal']:
+            signal_class = "signal-sell"
+            emoji = "🐲🔥"
+            explanation = "Strong Sell - Tor percentage raging upward (Very Bearish)"
+        elif "SELL" in tor_signal['signal']:
+            signal_class = "signal-sell"
+            emoji = "🔴"
+            explanation = "Sell - Tor percentage increasing (Bearish)"
+        elif "GODZILLA PUMP" in tor_signal['signal']:
+            signal_class = "signal-buy"
+            emoji = "🐲🚀🌟"
+            explanation = "GODZILLA PUMP - Tor percentage collapsing (Extreme Bullish)"
+        elif "STRONG BUY" in tor_signal['signal']:
+            signal_class = "signal-buy"
+            emoji = "🐲🚀"
+            explanation = "Strong Buy - Tor percentage retreating (Very Bullish)"
+        elif "BUY" in tor_signal['signal']:
+            signal_class = "signal-buy"
+            emoji = "🟢"
+            explanation = "Buy - Tor percentage decreasing (Bullish)"
+        else:
+            signal_class = "signal-neutral"
+            emoji = "🐲⚡"
+            explanation = "Battlefield calm - Tor percentage stable (Neutral)"
+        
+        st.markdown(f'<div class="{signal_class}">', unsafe_allow_html=True)
+        st.markdown(f'<h2 style="font-family: Orbitron; text-align: center; margin: 0.5rem 0;">{emoji} {tor_signal["signal"]} {emoji}</h2>', unsafe_allow_html=True)
+        st.markdown(f'<p style="text-align: center; color: #ff8888; font-family: Rajdhani; margin: 0.5rem 0;">{explanation}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="text-align: center; font-family: Orbitron; color: #ffffff; margin: 0.5rem 0;">Tor % Change: {tor_signal["tor_pct_change"]:+.2f}% | Trend: {tor_signal["tor_trend"]:+.2f}%</p>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # MULTI-COIN SIGNALS
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown('<h2 class="section-header">🎯 Godzillers ARMY SIGNALS</h2>', unsafe_allow_html=True)
+    
+    if 'snapshot_data' in st.session_state and prices:
+        snapshot_data = st.session_state.snapshot_data
+        tor_signal = analyzer.calculate_tor_signal(
+            snapshot_data['current_tor'], 
+            snapshot_data['previous_tor'], 
+            snapshot_data['tor_trend']
+        )
+        
+        # Apply Tor percentage trend analysis to all coins
+        coins_list = ['BTCUSDT', 'ETHUSDT', 'ADAUSDT']
+        
+        # Create columns for coin signals
+        signal_cols = st.columns(3)
+        
+        for idx, symbol in enumerate(coins_list):
+            if prices.get(symbol):
+                with signal_cols[idx]:
+                    emoji = get_coin_emoji(symbol)
+                    name = get_coin_display_name(symbol)
+                    price = prices[symbol]
+                    
+                    # Apply the same Tor percentage signal to all coins
+                    if "SELL" in tor_signal['signal']:
+                        signal_class = "signal-sell"
+                        signal_text = tor_signal['signal']
+                        signal_emoji = "🔴"
+                    elif "BUY" in tor_signal['signal']:
+                        signal_class = "signal-buy"
+                        signal_text = tor_signal['signal']
+                        signal_emoji = "🟢"
+                    else:
+                        signal_class = "signal-neutral"
+                        signal_text = tor_signal['signal']
+                        signal_emoji = "🟡"
+                    
+                    st.markdown(f'''
+                    <div class="{signal_class}" style="padding: 1rem; margin: 0.5rem 0;">
+                        <div style="text-align: center;">
+                            <h4 style="font-family: Orbitron; margin: 0.5rem 0; font-size: 1.1rem;">{emoji} {name}</h4>
+                            <p style="font-family: Orbitron; font-size: 1.2rem; font-weight: 700; margin: 0.5rem 0;">${price:,.2f}</p>
+                            <p style="font-family: Orbitron; font-size: 1rem; margin: 0.5rem 0;">{signal_emoji} {signal_text}</p>
+                            <p style="color: #ff8888; font-family: Rajdhani; font-size: 0.8rem; margin: 0;">Δ Tor %: {tor_signal['tor_pct_change']:+.2f}%</p>
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
+    else:
+        st.info("🔥 Update node data to see dragon army signals")
+    
+    # GODZILLERS Trademark Footer
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="trademark">
+    <p>🔥 GODZILLERS CRYPTO WARFARE SYSTEM 🔥</p>
+    <p>© 2025 GODZILLERS CRYPTO TRACKER • TOR PERCENTAGE SIGNAL TECHNOLOGY</p>
+    <p style="font-size: 0.7rem; color: #ff6666;">FORGE YOUR FORTUNE WITH DRAGON FIRE PRECISION</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-except Exception as e:
-    st.error(f"❌ Application error: {str(e)}")
-    st.info("Please try refreshing the page or check your internet connection.")
+def main():
+    """Main function with login check"""
+    # Initialize session state
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'username' not in st.session_state:
+        st.session_state.username = None
+    if 'snapshot_data' not in st.session_state:
+        st.session_state.snapshot_data = None
+    
+    # Check if user is logged in
+    if not st.session_state.logged_in:
+        login_page()
+    else:
+        main_app()
 
-# Auto-refresh option
-st.sidebar.markdown("---")
-if st.sidebar.button("🔄 Auto-refresh in 5s", use_container_width=True):
-    time.sleep(5)
-    st.rerun()
+if __name__ == "__main__":
+    main()
