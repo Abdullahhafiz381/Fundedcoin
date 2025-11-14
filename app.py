@@ -1060,60 +1060,7 @@ def main_app():
             
             st.markdown('</div>', unsafe_allow_html=True)
     
-    # TOR TREND CHART
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    st.markdown('<h2 class="section-header">📊 DRAGON TOR TREND CHART</h2>', unsafe_allow_html=True)
-    
-    tor_chart = analyzer.plot_tor_trend_chart()
-    if tor_chart:
-        st.plotly_chart(tor_chart, use_container_width=True, config={'displayModeBar': False})
-    else:
-        st.info("🔥 Collecting more data for dragon chart...")
-    
-    # NETWORK HEALTH SUMMARY
-    if len(analyzer.historical_data) > 0:
-        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-        st.markdown('<h2 class="section-header">🌐 DRAGON NETWORK HEALTH</h2>', unsafe_allow_html=True)
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if current_data['tor_percentage'] > 20:
-                status = "🐲 EXCELLENT"
-                delta = "HIGH PRIVACY"
-            elif current_data['tor_percentage'] > 10:
-                status = "🐲 GOOD"
-                delta = "MODERATE"
-            else:
-                status = "🐲 LOW"
-                delta = "LOW PRIVACY"
-            st.metric("TOR PRIVACY", status, delta=delta)
-        
-        with col2:
-            if signal_data['active_ratio'] > 0.8:
-                status = "🐲 EXCELLENT"
-                delta = "HIGH ACTIVITY"
-            elif signal_data['active_ratio'] > 0.6:
-                status = "🐲 GOOD"
-                delta = "MODERATE"
-            else:
-                status = "🐲 LOW"
-                delta = "LOW ACTIVITY"
-            st.metric("NETWORK ACTIVITY", status, delta=delta)
-        
-        with col3:
-            if signal_data['trend'] > 0.01:
-                status = "🐲 GROWING"
-                delta = "EXPANDING"
-            elif signal_data['trend'] < -0.01:
-                status = "🐲 SHRINKING"
-                delta = "CONTRACTING"
-            else:
-                status = "🐲 STABLE"
-                delta = "STEADY"
-            st.metric("NETWORK TREND", status, delta=delta)
-        
-        # Last update time
+    # Last update time
         last_time = datetime.fromisoformat(current_data['timestamp'])
         st.markdown(f'<p style="text-align: center; color: #ff8888; font-family: Rajdhani;">🕒 Dragon data updated: {last_time.strftime("%Y-%m-%d %H:%M:%S")}</p>', unsafe_allow_html=True)
         
