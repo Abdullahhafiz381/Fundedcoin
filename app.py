@@ -1060,17 +1060,6 @@ def main_app():
             
             st.markdown('</div>', unsafe_allow_html=True)
     
-    # Last update time
-        last_time = datetime.fromisoformat(current_data['timestamp'])
-        st.markdown(f'<p style="text-align: center; color: #ff8888; font-family: Rajdhani;">🕒 Dragon data updated: {last_time.strftime("%Y-%m-%d %H:%M:%S")}</p>', unsafe_allow_html=True)
-        
-        # Historical data info
-        if len(analyzer.historical_data) > 1:
-            st.markdown(f'<p style="text-align: center; color: #ff8888; font-family: Rajdhani;">📊 Dragon data points: {len(analyzer.historical_data)} snapshots collected</p>', unsafe_allow_html=True)
-    
-    else:
-        st.info("🔥 Tap 'UPDATE NODE DATA' above to load dragon network analysis!")
-    
     # GODZILLERS Trademark Footer
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.markdown("""
