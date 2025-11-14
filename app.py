@@ -502,7 +502,12 @@ class CryptoAnalyzer:
                 st.error(f"Failed to fetch snapshots: {snapshots_response.status_code}")
                 return None
             
-            snapshots = snapshots_response.json()['results']
+            snapshots_data = snapshots_response.json()
+            if 'results' not in snapshots_data:
+                st.error("Invalid response format from Bitnodes API")
+                return None
+                
+            snapshots = snapshots_data['results']
             
             if len(snapshots) < 2:
                 st.error("Not enough snapshots available")
@@ -547,7 +552,7 @@ class CryptoAnalyzer:
             }
             
         except Exception as e:
-            st.error(f"Error fetching snapshot data: {e}")
+            st.error(f"Error fetching snapshot data: {str(e)}")
             return None
     
     def calculate_tor_signal(self, current_tor, previous_tor, tor_trend):
@@ -613,6 +618,7 @@ def main_app():
     if st.button("🚪 LOGOUT", key="logout", use_container_width=False):
         st.session_state.logged_in = False
         st.session_state.username = None
+        st.session_state.snapshot_data = None
         st.rerun()
     
     # Welcome message
@@ -705,10 +711,11 @@ def main_app():
                     st.error("❌ Failed to update node data")
     
     # Display current node data if available
-    if 'snapshot_data' in st.session_state:
+    if 'snapshot_data' in st.session_state and st.session_state.snapshot_data is not None:
         snapshot_data = st.session_state.snapshot_data
-        current_time = datetime.fromisoformat(snapshot_data['timestamp'])
-        st.markdown(f'<p style="text-align: center; color: #ff4444; font-family: Rajdhani;">📊 Data updated: {current_time.strftime("%Y-%m-%d %H:%M:%S")}</p>', unsafe_allow_html=True)
+        if 'timestamp' in snapshot_data:
+            current_time = datetime.fromisoformat(snapshot_data['timestamp'])
+            st.markdown(f'<p style="text-align: center; color: #ff4444; font-family: Rajdhani;">📊 Data updated: {current_time.strftime("%Y-%m-%d %H:%M:%S")}</p>', unsafe_allow_html=True)
     
     # TOR PERCENTAGE SIGNAL ANALYSIS
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
@@ -722,7 +729,7 @@ def main_app():
         st.markdown('<div class="godzillers-card">', unsafe_allow_html=True)
         st.markdown('<h3 style="font-family: Orbitron; color: #ff4444; text-align: center;">🔄 TOR PERCENTAGE BATTLE</h3>', unsafe_allow_html=True)
         
-        if 'snapshot_data' in st.session_state:
+        if 'snapshot_data' in st.session_state and st.session_state.snapshot_data is not None:
             snapshot_data = st.session_state.snapshot_data
             tor_signal = analyzer.calculate_tor_signal(
                 snapshot_data['current_tor'], 
@@ -755,7 +762,7 @@ def main_app():
         st.markdown('<div class="godzillers-card">', unsafe_allow_html=True)
         st.markdown('<h3 style="font-family: Orbitron; color: #ff4444; text-align: center;">📊 WAR ROOM SIGNALS</h3>', unsafe_allow_html=True)
         
-        if 'snapshot_data' in st.session_state:
+        if 'snapshot_data' in st.session_state and st.session_state.snapshot_data is not None:
             snapshot_data = st.session_state.snapshot_data
             tor_signal = analyzer.calculate_tor_signal(
                 snapshot_data['current_tor'], 
@@ -785,7 +792,7 @@ def main_app():
         st.markdown('</div>', unsafe_allow_html=True)
     
     # MAIN SIGNAL DISPLAY WITH GODZILLERS THEME
-    if 'snapshot_data' in st.session_state:
+    if 'snapshot_data' in st.session_state and st.session_state.snapshot_data is not None:
         snapshot_data = st.session_state.snapshot_data
         tor_signal = analyzer.calculate_tor_signal(
             snapshot_data['current_tor'], 
@@ -833,7 +840,7 @@ def main_app():
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.markdown('<h2 class="section-header">🎯 Godzillers ARMY SIGNALS</h2>', unsafe_allow_html=True)
     
-    if 'snapshot_data' in st.session_state and prices:
+    if 'snapshot_data' in st.session_state and st.session_state.snapshot_data is not None and prices:
         snapshot_data = st.session_state.snapshot_data
         tor_signal = analyzer.calculate_tor_signal(
             snapshot_data['current_tor'], 
