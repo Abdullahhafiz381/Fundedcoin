@@ -1,64 +1,59 @@
 import streamlit as st
 import requests
 
-st.set_page_config(page_title="BTC Spot P_micro Signal", layout="centered")
-st.title("BTC Spot P_micro Signal Generator (KuCoin)")
+st.set_page_config(page_title="BTC/USDT Futures P_micro (Gate.io)", layout="centered")
+st.title("BTC/USDT Perpetual Futures P_micro Signal (Gate.io)")
 
-SYMBOL = "BTC-USDT"
+CONTRACT = "BTC_USDT"  # Gate.io naming for BTC futures perpetual
 
-def get_spot_order_book(symbol=SYMBOL):
-    url = f"https://api.kucoin.com/api/v1/market/orderbook/level2_100?symbol={symbol}"
+def get_futures_order_book(contract=CONTRACT, limit=1):
+    url = "https://fx-api.gateio.ws/api/v4/futures/usdt/order_book"
+    params = {
+        "contract": contract,
+        "limit": limit  # top N levels; 1 for top-of-book
+    }
     try:
-        response = requests.get(url, timeout=5)
-        st.write("HTTP Status:", response.status_code)
-        data = response.json()
+        resp = requests.get(url, params=params, timeout=5)
+        st.write("HTTP Status:", resp.status_code)
+        data = resp.json()
         st.write("Raw response:", data)
-
-        if data.get("code") != "200000":
-            st.error(f"Failed to fetch order book. Response: {data}")
+        # Check for expected structure
+        # Example successful response has 'bids' and 'asks'
+        if 'bids' not in data or 'asks' not in data:
+            st.error(f"Unexpected response format: {data}")
             return None, None, None, None
 
-        bids = data["data"]["bids"]
-        asks = data["data"]["asks"]
-
-        if not bids or not asks:
-            st.error(f"No bids or asks in response: {data}")
-            return None, None, None, None
-
-        best_bid = float(bids[0][0])
-        Qbid = float(bids[0][1])
-        best_ask = float(asks[0][0])
-        Qask = float(asks[0][1])
+        best_bid = float(data['bids'][0][0])
+        Qbid = float(data['bids'][0][1])
+        best_ask = float(data['asks'][0][0])
+        Qask = float(data['asks'][0][1])
         return best_bid, Qbid, best_ask, Qask
-
     except requests.exceptions.RequestException as e:
         st.error(f"Network error: {e}")
     except Exception as e:
-        st.error(f"Error parsing data: {e}")
-
+        st.error(f"Data parsing error: {e}")
     return None, None, None, None
 
 def compute_signal(A, Qbid, B, Qask):
     P_micro = (A * Qbid + B * Qask) / (Qbid + Qask)
     mid_price = (A + B) / 2
     if P_micro > mid_price:
-        signal = "BUY"
+        return P_micro, mid_price, "BUY"
     elif P_micro < mid_price:
-        signal = "SELL"
+        return P_micro, mid_price, "SELL"
     else:
-        signal = "HOLD"
-    return P_micro, mid_price, signal
+        return P_micro, mid_price, "HOLD"
 
-st.write(f"Fetching BTC/USDT spot order book from KuCoin...")
+st.write(f"Fetching futures order book for {CONTRACT} on Gate.io...")
 
 if st.button("Generate Signal"):
-    A, Qbid, B, Qask = get_spot_order_book()
-    if A is not None and B is not None:
-        P_micro, mid_price, signal = compute_signal(A, Qbid, B, Qask)
-        st.write(f"Best Bid: {A} | Bid Volume: {Qbid}")
-        st.write(f"Best Ask: {B} | Ask Volume: {Qask}")
+    A, Qbid, B, Qask = get_futures_order_book()
+    if A is not None:
+        P_micro, mid, signal = compute_signal(A, Qbid, B, Qask)
+        st.write(f"Best Bid: {A}, Bid Vol: {Qbid}")
+        st.write(f"Best Ask: {B}, Ask Vol: {Qask}")
         st.write(f"P_micro: {P_micro:.2f}")
-        st.write(f"Mid Price: {mid_price:.2f}")
+        st.write(f"Mid Price: {mid:.2f}")
         st.write(f"Signal: {signal}")
     else:
-        st.warning("Could not generate signal — order book fetch error.")
+        st.warning("Could not get order book — no signal generated.")
