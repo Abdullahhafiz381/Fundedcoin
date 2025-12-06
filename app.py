@@ -1,20 +1,21 @@
 import streamlit as st
 import requests
 
-st.set_page_config(page_title="BTC P_micro Signal (KuCoin)", layout="centered")
-st.title("BTC P_micro Signal Generator (KuCoin)")
+st.set_page_config(page_title="BTC Futures P_micro Signal", layout="centered")
+st.title("BTC Futures P_micro Signal Generator (KuCoin)")
 
-SYMBOL = "BTC-USDT"
+SYMBOL = "BTCUSDTM"  # Perpetual futures
+LIMIT = 1  # top level
 
-def get_order_book(symbol=SYMBOL):
-    url = f"https://api.kucoin.com/api/v1/market/orderbook/level2_100?symbol={symbol}"
+def get_futures_order_book(symbol=SYMBOL, limit=LIMIT):
+    url = f"https://api-futures.kucoin.com/api/v1/level2/depth?symbol={symbol}&limit={limit}"
     try:
         response = requests.get(url, timeout=5)
         st.write("HTTP Status:", response.status_code)
         data = response.json()
         st.write("Raw response:", data)
 
-        if data.get("code") != "200000":
+        if "code" in data and data["code"] != "200000":
             st.error(f"Failed to fetch order book. Response: {data}")
             return None, None, None, None
 
@@ -35,7 +36,6 @@ def get_order_book(symbol=SYMBOL):
         st.error(f"Network error: {e}")
     except Exception as e:
         st.error(f"Error parsing data: {e}")
-
     return None, None, None, None
 
 def compute_signal(A, Qbid, B, Qask):
@@ -49,10 +49,10 @@ def compute_signal(A, Qbid, B, Qask):
         signal = "HOLD"
     return P_micro, mid_price, signal
 
-st.write(f"Fetching order book for {SYMBOL} from KuCoin...")
+st.write(f"Fetching BTC Futures order book for {SYMBOL}...")
 
 if st.button("Generate Signal"):
-    A, Qbid, B, Qask = get_order_book()
+    A, Qbid, B, Qask = get_futures_order_book()
     if A is not None and B is not None:
         P_micro, mid_price, signal = compute_signal(A, Qbid, B, Qask)
         st.write(f"Best Bid: {A} | Bid Volume: {Qbid}")
