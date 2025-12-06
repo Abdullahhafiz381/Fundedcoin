@@ -4,20 +4,17 @@ import requests
 st.set_page_config(page_title="BTC P_micro Signal (KuCoin)", layout="centered")
 st.title("BTC P_micro Signal Generator (KuCoin)")
 
-# --- Config ---
-SYMBOL = "BTC-USDT"  # KuCoin format
-LEVEL = 1  # top level
+SYMBOL = "BTC-USDT"
 
-# --- Fetch order book from KuCoin ---
-def get_order_book(symbol=SYMBOL, level=LEVEL):
-    url = f"https://api.kucoin.com/api/v1/market/orderbook/level2?symbol={symbol}"
+def get_order_book(symbol=SYMBOL):
+    url = f"https://api.kucoin.com/api/v1/market/orderbook/level2_100?symbol={symbol}"
     try:
         response = requests.get(url, timeout=5)
         st.write("HTTP Status:", response.status_code)
         data = response.json()
-        st.write("Raw response:", data)  # debug
+        st.write("Raw response:", data)
 
-        if "code" not in data or data["code"] != "200000":
+        if data.get("code") != "200000":
             st.error(f"Failed to fetch order book. Response: {data}")
             return None, None, None, None
 
@@ -32,7 +29,6 @@ def get_order_book(symbol=SYMBOL, level=LEVEL):
         Qbid = float(bids[0][1])
         best_ask = float(asks[0][0])
         Qask = float(asks[0][1])
-
         return best_bid, Qbid, best_ask, Qask
 
     except requests.exceptions.RequestException as e:
@@ -42,7 +38,6 @@ def get_order_book(symbol=SYMBOL, level=LEVEL):
 
     return None, None, None, None
 
-# --- Compute P_micro and mid-price ---
 def compute_signal(A, Qbid, B, Qask):
     P_micro = (A * Qbid + B * Qask) / (Qbid + Qask)
     mid_price = (A + B) / 2
@@ -54,7 +49,6 @@ def compute_signal(A, Qbid, B, Qask):
         signal = "HOLD"
     return P_micro, mid_price, signal
 
-# --- Main ---
 st.write(f"Fetching order book for {SYMBOL} from KuCoin...")
 
 if st.button("Generate Signal"):
