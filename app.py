@@ -1,44 +1,38 @@
 import streamlit as st
 import requests
 
-st.set_page_config(page_title="BTC P_micro Signal (Bybit)", layout="centered")
-st.title("BTC P_micro Signal Generator (Bybit)")
+st.set_page_config(page_title="BTC P_micro Signal (KuCoin)", layout="centered")
+st.title("BTC P_micro Signal Generator (KuCoin)")
 
-# Config
-SYMBOL = "BTCUSDT"
-CATEGORY = "spot"
-LIMIT = 1  # top level size (you can try 5 or more if available)
+# --- Config ---
+SYMBOL = "BTC-USDT"  # KuCoin format
+LEVEL = 1  # top level
 
-# Fetch order book from Bybit REST API
-def get_order_book(symbol=SYMBOL, category=CATEGORY, limit=LIMIT):
-    url = "https://api.bybit.com/v5/market/orderbook"
-    params = {
-        "symbol": symbol,
-        "category": category,
-        "limit": limit
-    }
+# --- Fetch order book from KuCoin ---
+def get_order_book(symbol=SYMBOL, level=LEVEL):
+    url = f"https://api.kucoin.com/api/v1/market/orderbook/level2?symbol={symbol}"
     try:
-        response = requests.get(url, params=params, timeout=5)
-        st.write("HTTP Status:", response.status_code)  # debug
+        response = requests.get(url, timeout=5)
+        st.write("HTTP Status:", response.status_code)
         data = response.json()
         st.write("Raw response:", data)  # debug
 
-        # Bybit returns data under "result" key
-        result = data.get("result")
-        if not result:
-            st.error(f"No result in response: {data}")
+        if "code" not in data or data["code"] != "200000":
+            st.error(f"Failed to fetch order book. Response: {data}")
             return None, None, None, None
 
-        bids = result.get("list")[0].get("bids")
-        asks = result.get("list")[0].get("asks")
+        bids = data["data"]["bids"]
+        asks = data["data"]["asks"]
+
         if not bids or not asks:
-            st.error(f"No bids or asks in result: {result}")
+            st.error(f"No bids or asks in response: {data}")
             return None, None, None, None
 
         best_bid = float(bids[0][0])
         Qbid = float(bids[0][1])
         best_ask = float(asks[0][0])
         Qask = float(asks[0][1])
+
         return best_bid, Qbid, best_ask, Qask
 
     except requests.exceptions.RequestException as e:
@@ -48,6 +42,7 @@ def get_order_book(symbol=SYMBOL, category=CATEGORY, limit=LIMIT):
 
     return None, None, None, None
 
+# --- Compute P_micro and mid-price ---
 def compute_signal(A, Qbid, B, Qask):
     P_micro = (A * Qbid + B * Qask) / (Qbid + Qask)
     mid_price = (A + B) / 2
@@ -59,7 +54,8 @@ def compute_signal(A, Qbid, B, Qask):
         signal = "HOLD"
     return P_micro, mid_price, signal
 
-st.write(f"Fetching order book for {SYMBOL} from Bybit...")
+# --- Main ---
+st.write(f"Fetching order book for {SYMBOL} from KuCoin...")
 
 if st.button("Generate Signal"):
     A, Qbid, B, Qask = get_order_book()
