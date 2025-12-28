@@ -1,62 +1,54 @@
 import streamlit as st
 import requests
+import pandas as pd
+import numpy as np
 
-st.set_page_config(page_title="BTC-USDT Futures P_micro (OKX)", layout="centered")
-st.title("BTC-USDT Futures P_micro Signal (OKX)")
+# Bitnode Signal Engine
+def get_bitnode_data():
+    # Fetch real data from Bitnodes API for BTC and ETH
+    btc_response = requests.get('https://bitnodes.io/api/v1/snapshots/latest/')
+    eth_response = requests.get('https://bitnodes.io/api/v1/snapshots/latest/')
+    
+    btc_data = btc_response.json()
+    eth_data = eth_response.json()
+    
+    # Calculate Tor Percentage and Tor Change for BTC and ETH
+    btc_tor_percent = (btc_data['tor_nodes'] / btc_data['total_nodes']) * 100
+    eth_tor_percent = (eth_data['tor_nodes'] / eth_data['total_nodes']) * 100
+    
+    # Determine Bitnode Signal Output (BUY/SELL/HOLD)
+    # ...
+    
+    return btc_signal, eth_signal
 
-INST_ID = "BTC-USDT-SWAP"  # OKX perpetual futures instrument id
-DEPTH = 1  # fetch only top-of-book
+# Mathematical Signal Engine
+def get_mathematical_signals():
+    # Fetch real Binance order book and price data for 50 BTC-correlated pairs
+    # Calculate core equations and determine Direction (BUY/SELL/HOLD) and Strength Percentage
+    # ...
+    
+    return signals
 
-def get_order_book(instId=INST_ID, depth=DEPTH):
-    url = "https://www.okx.com/api/v5/market/books"
-    params = {"instId": instId, "sz": depth}
-    try:
-        r = requests.get(url, params=params, timeout=5)
-        st.write("HTTP Status:", r.status_code)
-        data = r.json()
-        st.write("Raw response:", data)
-        # data["data"] is a list: first element has 'bids' and 'asks'
-        if not data.get("data"):
-            st.error("No data in response")
-            return None, None, None, None
+# Confirmation Logic
+def get_confirmed_signal(bitnode_signal, mathematical_signals):
+    # Compare Bitnode Signal and Mathematical Signal
+    # Display "CONFIRMED SIGNAL" with 99% confidence if both signals match
+    # ...
+    
+    return confirmed_signal
 
-        entry = data["data"][0]
-        bids = entry.get("bids", [])
-        asks = entry.get("asks", [])
-        if not bids or not asks:
-            st.error("No bids or asks in order book")
-            return None, None, None, None
+# Main logic
+def main():
+    btc_signal, eth_signal = get_bitnode_data()
+    mathematical_signals = get_mathematical_signals()
+    confirmed_signal = get_confirmed_signal(btc_signal, eth_signal, mathematical_signals)
+    
+    # Display live BTC price
+    btc_price = requests.get('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT').json()['price']
+    st.write(f'BTC Price: {btc_price}')
+    
+    # Display Bitnode Signal and Mathematical Signal Table
+    # ...
 
-        best_bid = float(bids[0][0])
-        Qbid     = float(bids[0][1])
-        best_ask = float(asks[0][0])
-        Qask     = float(asks[0][1])
-        return best_bid, Qbid, best_ask, Qask
-
-    except Exception as e:
-        st.error(f"Error fetching/parsing order book: {e}")
-        return None, None, None, None
-
-def compute_signal(A, Qbid, B, Qask):
-    P_micro = (A * Qbid + B * Qask) / (Qbid + Qask)
-    mid_price = (A + B) / 2
-    if P_micro > mid_price:
-        return "BUY", P_micro, mid_price
-    elif P_micro < mid_price:
-        return "SELL", P_micro, mid_price
-    else:
-        return "HOLD", P_micro, mid_price
-
-st.write(f"Fetching order book for {INST_ID} ...")
-
-if st.button("Generate Signal"):
-    A, Qbid, B, Qask = get_order_book()
-    if A is not None:
-        signal, P_micro, mid = compute_signal(A, Qbid, B, Qask)
-        st.write(f"Best Bid: {A}  |  Bid Qty: {Qbid}")
-        st.write(f"Best Ask: {B}  |  Ask Qty: {Qask}")
-        st.write(f"P_micro: {P_micro:.2f}")
-        st.write(f"Mid Price: {mid:.2f}")
-        st.write(f"Signal: {signal}")
-    else:
-        st.warning("Could not fetch valid order book — no signal generated.")
+if __name__ == '__main__':
+    main()
